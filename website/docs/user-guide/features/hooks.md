@@ -1455,6 +1455,15 @@ def my_callback(
 | `pattern_keys` | `list[str]` | All pattern keys that matched |
 | `session_key` | `str` | Session identifier, useful for scoping notifications per-chat |
 | `surface` | `str` | `"cli"` for classic CLI sessions (dangerous commands, protected agent-instruction writes, consent prompts; also when the gateway renders the prompt for that session), `"gateway"` for async platform approvals (the Ink TUI and Desktop app also report `"gateway"` today), `"smart"` for auxiliary-LLM auto approve/deny decisions, or the caller's consent surface for MCP/vault prompts (`"mcp-elicitation/<server>"`, `"mcp-trust/<server>"`, `"vault-payment"`) |
+| `shell_context` | `dict`, optional | Host-owned hints bound only while the normal terminal command guards run: `version: 1`, `backend`, force-redacted `base_cwd` and `requested_workdir`, `shell: None`, and `cwd_evidence: "pre_execution_hint_not_attestation"`. The base cwd can differ from the eventual execution cwd (persistent-shell state, workdir resolution, recovery); the actual shell, environment and dependencies are not attested. Absent outside that terminal path, including protected-write/MCP/vault approvals and older hosts. Never infer local execution or human ingress/consent from missing fields, routing IDs, or these hints. |
+
+The terminal binds these hints with a context-local immutable `ShellApprovalContext`
+(`tools.approval_observation.shell_approval_context`) and restores the previous
+binding on every exit, including cancellation/errors. The ordinary approval
+ordering, early returns and decision result are unchanged. Observers must bound
+and minimize their own work; hints are not an execution capability or an exact
+request binding. In particular, `off`, unconditional floors and other early
+returns need not fire a candidate hook. Hook returns remain ignored.
 
 **Return value:** ignored. Hooks here are observer-only; they cannot veto or pre-answer the approval. Use [`pre_tool_call`](#pre_tool_call) to block a tool before it reaches the approval system.
 

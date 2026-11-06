@@ -1559,7 +1559,9 @@ def terminal_tool(
                 ))
             # Pre-exec security checks (floors + dangerous command detection);
             # force=True means the user already confirmed.
-            verdict = _run_approval_guards(command, env_type, plan.config, force=force)
+            from tools.approval_observation import shell_approval_context
+            with shell_approval_context(backend=env_type, cwd=cwd, requested_workdir=workdir):
+                verdict = _run_approval_guards(command, env_type, plan.config, force=force)
 
             pty_disabled = pty and _command_requires_pipe_stdin(command)
             if plan.promoted_from_foreground_timeout is not None:

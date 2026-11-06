@@ -67,6 +67,10 @@ def _fire_approval_hook(hook_name: str, **kwargs) -> None:
         kwargs.setdefault("tool_call_id", _approval_tool_call_id.get())
         if _approval_session_id.get():
             kwargs.setdefault("session_id", _approval_session_id.get())
+        from tools.approval_observation import current_shell_context
+        shell_context = current_shell_context()
+        if shell_context is not None:
+            kwargs.setdefault("shell_context", shell_context.observer_payload())
         invoke_hook(hook_name, **kwargs)
     except Exception as exc:
         # invoke_hook() swallows per-callback errors; this is the dispatch layer itself failing.
