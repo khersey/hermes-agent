@@ -344,6 +344,18 @@ intentionally **no plugin approval policy, auto-allow callback, or required
 may use the plugin capability-consent model, but transport selection does not
 grant it.
 
+### Smart approval reviewer providers (new development API)
+
+This branch separately adds `ctx.register_approval_reviewer(provider)` for
+explicitly selected native authorization-policy plugins. It is **not** part
+of the approval transport or observer interfaces above. The default remains
+`approvals.reviewer: builtin`; custom selection replaces the old judge rather
+than stacking it, and unavailable/unsupported/error outcomes use human
+fallback. See [the reviewer contract](../../developer-guide/plugins/approval-reviewer-plugin.md)
+for explicit selection, the narrow foreground local-shell scope, deadlines,
+one-operation binding and live-state/TOCTOU limitations. Older hosts do not
+support this new registration method.
+
 ### Migration for existing users
 
 When you upgrade to a version of Hermes that has opt-in plugins (config schema v21+), any user plugins already installed under `~/.hermes/plugins/` that weren't already in `plugins.disabled` are **automatically grandfathered** into `plugins.enabled`. Your existing setup keeps working. Bundled standalone plugins are NOT grandfathered — even existing users have to opt in explicitly. (Bundled platform/backend plugins never needed grandfathering because they were never gated.)

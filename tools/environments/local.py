@@ -1142,6 +1142,8 @@ class LocalEnvironment(BaseEnvironment):
             cmd_string = _prepend_shell_init(cmd_string, _resolve_shell_init_files())
         args = [bash, *(["-l"] if login else []), "-c", cmd_string]
         self._recover_cwd()
+        from tools.approval_reviewer import consume_local_shell
+        consume_local_shell(self, args, run_env, self.cwd, stdin_data)
         # Not spawn_owned: an awaited command needs no spawn-ledger entry; own_process_groups below hands
         # its group to the owner-death supervisor and _wait_for_process releases it.
         proc = subprocess.Popen(

@@ -23,6 +23,11 @@ from hermes_cli.plugins_loader import _plugin_home_scope, _serialized_replacemen
 logger = logging.getLogger(__name__)
 
 _SCOPED_PROVIDER_REGISTRARS: tuple[tuple[str, str, str, str, str, str, dict[str, Any]], ...] = (
+    ("register_approval_reviewer", "approval_reviewer", "tools.approval_reviewer_registry",
+     "tools.approval_reviewer:ApprovalReviewer", "approval reviewer",
+     "Register a trusted in-process smart-approval reviewer. Explicit approvals.reviewer selection "
+     "is required; builtin is reserved. Missing/unsupported/error results go to human approval, "
+     "never another model. Only bound foreground local shell actions are supported.", {}),
     ("register_login_backend", "login_backend", "agent.vault_backend_registry",
      "agent.vault_backends.base:LoginBackend", "login backend",
      "Register a trusted in-process browser-vault LoginBackend; explicit vault.<name>.enabled "

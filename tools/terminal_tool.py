@@ -1376,6 +1376,10 @@ def _run_foreground(
         except Exception as e:
             # A backend exception (e.g. an SSH connect timeout) never reached an exit status, so it
             # is not a terminal outcome; Hermes' own deadline arrives as ``hermes_timed_out``.
+            from tools.approval_reviewer import ReviewExecutionError
+            if isinstance(e, ReviewExecutionError):
+                return _error_json("Selected approval review expired or changed; command not run. Request fresh approval.",
+                                   status="blocked")
             if "timeout" in str(e).lower():
                 return _error_json(f"Command timed out after {effective_timeout} seconds", exit_code=124)
             # Retry on transient errors
@@ -1466,6 +1470,10 @@ def _degraded_result(e: EnvironmentConnectionError, task_id: Optional[str]) -> s
     }, ensure_ascii=False)
 
 
+from tools.approval_reviewer import reviewed_shell_call
+
+
+@reviewed_shell_call
 def terminal_tool(
     command: str,
     background: bool = False,
@@ -1514,6 +1522,11 @@ def terminal_tool(
             # From here on this IS a background=true call for the stripped command: every guard
             # below (lifecycle, workdir, self-repo, dangerous-command approval) sees what runs.
             command, background = auto_bg, True
+        if getattr(plan, "promoted_from_foreground_timeout", None) is not None:
+            # Resolve the actual spawn route before reviewer admission. Background/PTY
+            # launches do not pass through the foreground LocalEnvironment fence.
+            background, notify_on_complete, watch_patterns = True, True, None
+        pty_disabled = pty and _command_requires_pipe_stdin(command)
         env = _acquire_env(plan, task_id)
         # _lookup_active_env stamps whichever of the two keys holds the env.
         with _call_in_flight(plan.effective_task_id, task_id):
@@ -1560,15 +1573,18 @@ def terminal_tool(
             # Pre-exec security checks (floors + dangerous command detection);
             # force=True means the user already confirmed.
             from tools.approval_observation import shell_approval_context
+            from tools.approval_reviewer import bind_local_shell, _current
+            bind_local_shell(command=command, env=env, backend=env_type, background=background,
+                             cwd=lambda: _resolve_command_cwd(workdir=workdir, default_cwd=cwd, session_key=session_key,
+                                                              env_type=env_type, env=env))
             with shell_approval_context(backend=env_type, cwd=cwd, requested_workdir=workdir):
                 verdict = _run_approval_guards(command, env_type, plan.config, force=force)
 
-            pty_disabled = pty and _command_requires_pipe_stdin(command)
-            if plan.promoted_from_foreground_timeout is not None:
-                # Promotion implies notify_on_complete; watch_patterns is a background-only flag the
-                # caller could not have meant for a foreground call, and the two are exclusive anyway.
-                background, notify_on_complete, watch_patterns = True, True, None
             if background:
+                # Foreground reviewer authority cannot cross into an unfenced route.
+                if _current.get().required:
+                    raise _Rejected(_error_json(
+                        "Selected approval review cannot authorize background execution; command not run.", status="blocked"))
                 result = spawn_background_process(
                     command=command, env=env, env_type=env_type, effective_task_id=effective_task_id,
                     task_id=task_id, session_key=session_key, workdir=workdir, cwd=cwd,

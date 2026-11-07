@@ -3102,6 +3102,15 @@ Patterns are case-insensitive fnmatch globs and must be quoted in YAML (a bare l
 
 ### Custom smart-approval policy
 
+**New in this development branch:** `approvals.reviewer` defaults to `builtin`.
+An explicitly selected native reviewer replaces the auxiliary judge for its
+supported shell surface; unavailable, unsupported and failed reviews follow
+human approval, never a builtin model fallback. `approvals.reviewer_timeout`
+defaults to 10 seconds (positive finite values, at most 30). See the
+[native reviewer contract](../developer-guide/plugins/approval-reviewer-plugin.md).
+The `smart_policy` and auxiliary approval model settings below apply only to
+the builtin reviewer; custom providers do not inherit translated prompts.
+
 `approvals.smart_policy` lets you append your own rules to the smart-approval reviewer's instructions. When set, the text is added to the guardian LLM's system prompt (the trusted channel — never alongside the untrusted command text), so you can tighten or relax its judgment for your environment without editing code:
 
 ```yaml

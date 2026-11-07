@@ -791,7 +791,7 @@ _ACTION_GATE = _GateSpec(
 
 def _smart_gate(spec: _GateSpec, command: str, description: str, pattern_key: str,
                 pattern_keys: list[str], session_key: str, *,
-                human_present: bool) -> tuple[dict | None, bool]:
+                human_present: bool, review_backend: str = "") -> tuple[dict | None, bool]:
     """Guardian-LLM step -> ``(result, smart_denied_for_owner)``: a result ends the gate;
     ``smart_denied_for_owner`` means an interactive owner may still override the DENY for this
     one operation (once/deny only, nothing persists).
@@ -801,6 +801,19 @@ def _smart_gate(spec: _GateSpec, command: str, description: str, pattern_key: st
     counts toward the denial breaker even when an owner may override it. ESCALATE follows the
     normal, potentially persistent manual behavior.
     """
+    from tools.approval_reviewer import reviewer_selection, review_shell
+    selected = reviewer_selection()
+    if selected != "builtin":
+        verdict = review_shell(selected, command) if spec is _COMMAND_GATE and review_backend == "local" else "abstain"
+        if verdict == "allow":
+            _reset_denials(session_key)
+            return {"approved": True, "message": None, "reviewer_approved": True,
+                    "smart_approved": True, "description": description}, False
+        if verdict == "deny":
+            _record_denial(session_key)
+            return {"approved": False, "message": "BLOCKED by selected approval reviewer. Do NOT retry.",
+                    "smart_denied": True}, False
+        return None, False
     verdict = _smart_verdict(command, description, pattern_key, pattern_keys, session_key)
     if verdict == "approve":
         _reset_denials(session_key)
@@ -824,7 +837,7 @@ def _smart_gate(spec: _GateSpec, command: str, description: str, pattern_key: st
 def _human_decision(spec: _GateSpec, *, command: str, description: str,
                     pattern_key: str, pattern_keys: list[str],
                     session_key: str, approval_callback, is_cli: bool, is_gateway: bool,
-                    is_ask: bool, smart: bool = False, pending_body=None) -> dict:
+                    is_ask: bool, smart: bool = False, pending_body=None, review_backend: str = "") -> dict:
     """Ask a human (after the optional guardian-LLM step) and turn the answer into the gate result.
 
     ``pattern_keys`` are what :func:`_persist_choice` stores on session/always; a smart-DENY
@@ -836,7 +849,8 @@ def _human_decision(spec: _GateSpec, *, command: str, description: str,
     smart_denied = False
     if smart:
         result, smart_denied = _smart_gate(spec, command, description, pattern_key, pattern_keys,
-                                           session_key, human_present=is_cli or is_gateway or is_ask)
+                                           session_key, human_present=is_cli or is_gateway or is_ask,
+                                           review_backend=review_backend)
         if result is not None:
             return result
     pending_body = pending_body() if pending_body else None
@@ -1225,7 +1239,7 @@ def check_all_command_guards(command: str, env_type: str,
         _COMMAND_GATE, command=command, description=description,
         pattern_key=keys[0], pattern_keys=keys,
         session_key=session_key, approval_callback=approval_callback,
-        is_cli=is_cli, is_gateway=is_gateway, is_ask=is_ask, smart=approval_mode == "smart",
+        is_cli=is_cli, is_gateway=is_gateway, is_ask=is_ask, smart=approval_mode == "smart", review_backend=env_type,
     )
 
 
